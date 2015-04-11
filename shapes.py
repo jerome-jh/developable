@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import math
 from dxfwrite import DXFEngine as dxf
 import numpy as np
 from math import *
@@ -43,63 +44,115 @@ def debug_rn():
   for i in np.arange(0, n_gen):
     print(Rxn(i))
 
+def length(vector):
+  return math.sqrt(np.sum(vector*vector))
+
+def polar(vector):
+#  print(vector, vector.shape)
+  r = length(vector)
+  if r != 0:
+    zproj = np.copy(vector)
+    zproj[2] = 0
+    rz = length(zproj)
+    if rz != 0:
+      phi = math.acos(np.dot(vector / r, zproj / rz))
+      xproj = np.copy(zproj)
+      xproj[1] = 0
+      rx = length(xproj)
+      if rx != 0:
+        theta = math.acos(np.dot(zproj / rz, xproj / rx))
+      else:
+        theta = math.copysign(1, vector[1]) * math.pi / 2
+    else:
+      theta = 0
+      phi = math.copysign(1, vector[2]) * math.pi / 2
+  else:
+    theta = 0
+    phi = 0
+  return np.array([r, theta, phi])
+
 ## A shape is made of a support curve and a number of generatrices
 ## represented as vectors starting from the curve
 class Shape():
   def __init__(self):
-    self.origin = np.array([[0,0,0]]).transpose()
-    self.support = np.zeros((3,n_gen))
-    self.gen = np.zeros((3,n_gen))
+    self.origin = np.array([0,0,0])
+    self.support = np.zeros((n_gen,3))
+    self.gen = np.zeros((n_gen,3))
 
   def rotate(self, matrix):
-    self.origin = np.dot(matrix, self.origin)
-    self.support = np.dot(matrix, self.support)
-    self.gen = np.dot(matrix, self.gen)
+    self.origin = np.dot(self.origin, matrix)
+    self.support = np.dot(self.support, matrix)
+    self.gen = np.dot(self.gen, matrix)
+
+  def translate(self, vector):
+    self.origin = self.origin + vector
+
+  def develop(self):
+    return
 
 class Cone(Shape):
   def __init__(self, angle, length):
-    self.offset = np.zeros((3,n_gen+1))
-    self.origin = np.array([[0,0,0]]).transpose()
+    self.offset = np.zeros((n_gen+1,3))
+    self.origin = np.array([0,0,0])
     first = np.array([length, 0, 0])
-    first = np.dot(Ry(angle), first)
-    self.gen = np.zeros((3,n_gen+1))
+    first = np.dot(first, Ry(angle))
+    self.gen = np.zeros((n_gen+1,3))
     for i in np.arange(0, n_gen+1):
-      self.gen[:,i] = np.dot(Rxn(i), first);
+      self.gen[i] = np.dot(first, Rxn(i));
 
   def plot(self):
-    dots = self.offset + self.gen
-    dots = np.append(self.origin, dots, axis=1)
-    #ax = fig.add_subplot(111, projection='3d')
-    triangles = [(0, i, i + 1) for i in range(1, n_gen)]
-    mlab.triangular_mesh(dots[0,:], dots[1,:], dots[2,:], triangles)
+    dots = np.zeros((n_gen+2, 3))
+    dots[0] = self.origin
+    dots[1:] = self.offset + self.gen
+    triangles = np.zeros((n_gen, 3))
+    for i in range(1,n_gen):
+        triangles[i] = np.array([0, i, i + 1])
+    #print(dots.shape)
+    #print(triangles.shape)
+    mlab.triangular_mesh(dots[:,0], dots[:,1], dots[:,2], triangles)
 
 class Cylinder(Shape):
   def __init__(self, radius,length):
-    self.origin = np.array([[0,0,0]]).transpose()
-    self.support = np.zeros((3, n_gen+1))
+    self.origin = np.array([0,0,0])
+    self.support = np.zeros((n_gen+1,3))
     first = np.array([0, radius, 0])
     for i in np.arange(0, n_gen+1):
-       self.support[:,i] = np.dot(Rxn(i), first) 
-    self.gen = np.zeros((3, n_gen+1))
+       self.support[i] = np.dot(first, Rxn(i)) 
+    self.gen = np.zeros((n_gen+1,3))
     for i in np.arange(0, n_gen+1):
-      self.gen[:,i] = np.array([length, 0, 0])
+      self.gen[i] = np.array([length, 0, 0])
 
   def plot(self):
-    dots = self.support + self.gen
-    dots = np.append(self.support, dots, axis=1)
+    dots = np.zeros((2*(n_gen+1), 3))
+    dots[0:n_gen+1] = self.support + self.gen
+    dots[n_gen+1:] = self.support
     triangles = np.zeros((2*(n_gen+1), 3))
     for i in np.arange(0, n_gen):
-        triangles[i,:] = np.array([i, i + n_gen, i + n_gen + 1])
-        triangles[i + n_gen,:] = np.array([i, i + 1, i + n_gen + 1])
-    print(triangles.shape)
-    mlab.triangular_mesh(dots[0,:], dots[1,:], dots[2,:], triangles)
+        triangles[i] = np.array([i, i + n_gen, i + n_gen + 1])
+        triangles[i + n_gen] = np.array([i, i + 1, i + n_gen + 1])
+    #print(dots.shape)
+    #print(triangles.shape)
+    mlab.triangular_mesh(dots[:,0], dots[:,1], dots[:,2], triangles)
+
+class Spiral(Shape):
+  def __init__(self):
+    self.origin = np.array([0,0,0])
+    
+
+c = Cone(rad(30), 10)
+c.plot()
 
 c = Cylinder(1, 10)
 c.rotate(Ry(rad(90)))
 c.plot()
 
-c = Cone(rad(30), 10)
-c.plot()
-
 mlab.show()
 
+print(polar(np.array([0,0,0])))
+print(polar(np.array([1,0,0])))
+print(polar(np.array([0,1,0])))
+print(polar(np.array([0,0,1])))
+print(polar(np.array([1,0,1])))
+print(polar(np.array([1,1,0])))
+print(polar(np.array([0,1,1])))
+print(polar(np.array([1,1,1])))
