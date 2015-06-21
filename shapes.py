@@ -124,6 +124,12 @@ class Rotation():
     vect = _toarr(vect)
     return np.dot(self.R, vect)
 
+  def vs(self, vectors):
+    """
+    Rotate vectors as lines in a Numpy array
+    """
+    return np.dot(vectors, np.transpose(self.R))
+    
 
 class Point():
   """
@@ -202,8 +208,8 @@ class Developable():
   def rotate(self, axis, angle, origin=nullvect):
     R = Rotation(axis, angle, origin)
     self.origin = R.p(self.origin)
-    self.support = np.dot(self.support, np.transpose(R.R))
-    self.gen = np.dot(self.gen, np.transpose(R.R))
+    self.support = R.vs(self.support)
+    self.gen = R.vs(self.gen)
     return self
 
   def reverse(self):
@@ -214,18 +220,18 @@ class Developable():
   def develop(self):
     return
 
-  def _cut(self, offset, vector, plane):
-    l = Line(vector, offset)
-    alpha = alpha_plane_line(plane, l)
+  def _cut(self, line, plane):
+    alpha = alpha_plane_line(plane, line)
+    vector = line.dir
     if alpha <= 0:
       vector = 0
     elif alpha < 1:
-      vector = alpha * vector
-    return offset, vector
+      vector = alpha * vector 
+    return vector
 
   def cut(self, plane):
     for i in np.arange(self.support.shape[0]):
-      self.support[i], self.gen[i] = self._cut(self.support[i], self.gen[i], plane)  
+      self.gen[i] = self._cut(Line(self.gen[i], self.origin + self.support[i]), plane)  
 
   def plot(self):
     dots = np.zeros((2*(n_gen+1), 3))
@@ -317,45 +323,38 @@ class Plane(Point):
     ## Plot a square centered on self.origin
     x, y, z = self.origin
     nx, ny, nz = self.norm
+    v = np.zeros((4,3))
     ## v is orthogonal to self.norm, hence part of the plane
-    v = np.array([ny + nz, -nx + nz, -nx - ny])
-    v = math.sqrt(2) * width * v / length(v)
-    #v2 = np.dot(v, Rv(self.norm, np.pi / 2))
-    #print(v, v2)
-    m = np.array([[1, -0.5, -0.5],
-                  [-0.5, 1, -0.5],
-                  [-0.5, -0.5, 1]])
-    m2 =  np.zeros(m.shape)
-    m2[0] = np.multiply(m[0], v) + self.origin
-    m2[1] = np.multiply(m[1], v) + self.origin
-    m2[2] = np.multiply(m[2], v) + self.origin
-    #print(m2)
+    v[0] = np.array([ny + nz, -nx + nz, -nx - ny])
+    v[0] = math.sqrt(2) * width * v[0] / length(v[0])
+    v[2] = -v[0]
+    R = Rotation(p.norm, np.pi/2)
+    v[1] = R.v(v[0])
+    v[3] = R.v(v[2])
+    v = v + self.origin
     import mayavi.mlab as mlab
     mlab.quiver3d(x, y, z, nx, ny, nz)
-    mlab.triangular_mesh(m2[:,0], m2[:,1], m2[:,2], [[0, 1, 2]])
+    mlab.triangular_mesh(v[:,0], v[:,1], v[:,2], [[0, 1, 2], [2, 3, 0]])
     
 
 class Line(Point):
-  def __init__(self, dir, origin=np.array([0, 0, 0])):
-    origin = np.asarray(origin)
-    dir = np.asarray(dir)
-    assert(origin.shape == (3,))
-    assert(dir.shape == (3,))
-    self.origin = origin
-    self.dir = dir 
-
-
-def inter_plane_line(plane, line):
-  #alpha = np.dot(plane.origin, plane.norm) - np.dot(line.origin, plane.norm)
-  #alpha = np.dot(plane.norm, plane.origin - line.origin)
-  #alpha = alpha / np.dot(line.dir, plane.norm)
-  return line.origin + alpha_plane_line(plane, line) * line.dir
+  def __init__(self, dir, origin=nullvect):
+    self.dir, self.origin = _toarr(dir, origin)
 
 
 def alpha_plane_line(plane, line):
+  """
+  Compute alpha, which is the scaling factor for the line direction vector
+  to reach the plane
+  """
   alpha = np.dot(plane.norm, plane.origin - line.origin)
   return alpha / np.dot(line.dir, plane.norm)
 
+def inter_plane_line(plane, line):
+  """
+  Compute the intersection point between the line and the plane
+  """
+  return line.origin + alpha_plane_line(plane, line) * line.dir
 
 def inter(o1, o2):
   return inter_plane_line(o1, o2)
@@ -408,7 +407,7 @@ else:
   #c.plot()
 
   p = Plane([1,0,0])
-  p.rotate(b.z, rad(45/2))
+  p.rotate(b.z, rad(45))
   p.translate((110 - 4 - 7) * b.x)
   p.plot(200)
   c.cut(p)
