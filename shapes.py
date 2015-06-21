@@ -216,9 +216,30 @@ class Developable():
     for i in np.arange(self.support.shape[0]):
       self.support[i] = self.support[i] + self.gen[i]  
       self.gen[i] = -self.gen[i]
+    return self
+
+  def extend(self, a):
+    """
+    Extend the length of the generatrices by 'a'
+    They are extended in one direction if a>0
+    and in the opposite direction if a <0
+    Origin is unchanged
+    """
+    dv = np.zeros(self.gen.shape)
+    for i in np.arange(dv.shape[0]):
+      dv[i] = (float(abs(a))/length(self.gen[i])) * self.gen[i]
+    self.gen = self.gen + dv
+    if a < 0:
+      self.support = self.support - dv
+    return self
+       
+  def extend2(self, a):
+    self.extend(a)
+    self.extend(-a)
+    return self
 
   def develop(self):
-    return
+    return self
 
   def _cut(self, line, plane):
     alpha = alpha_plane_line(plane, line)
@@ -232,6 +253,7 @@ class Developable():
   def cut(self, plane):
     for i in np.arange(self.support.shape[0]):
       self.gen[i] = self._cut(Line(self.gen[i], self.origin + self.support[i]), plane)  
+    return self
 
   def plot(self):
     dots = np.zeros((2*(n_gen+1), 3))
@@ -328,7 +350,7 @@ class Plane(Point):
     v[0] = np.array([ny + nz, -nx + nz, -nx - ny])
     v[0] = math.sqrt(2) * width * v[0] / length(v[0])
     v[2] = -v[0]
-    R = Rotation(p.norm, np.pi/2)
+    R = Rotation(self.norm, np.pi/2)
     v[1] = R.v(v[0])
     v[3] = R.v(v[2])
     v = v + self.origin
@@ -365,6 +387,134 @@ print("Hello")
 
 b = Base()
 b.plot(10)
+
+def packraft():
+  import copy
+  import math
+
+  ## Radius of tubes
+  r = 25./2
+  ## Inner width
+  w = 40
+  ## Inner length
+  l = 110
+  ## Bow upturn
+  u = 6
+  ## Bow angle
+  a = math.atan(u / (2*r + 10))
+
+  p1 = Plane(b.x)
+  p1.rotate(b.z, -np.pi/8)
+
+  p2 = Plane(b.y)
+  p2.translate(-10*b.x+10*b.y)
+  p2.rotate(b.z, np.pi/8, p2.origin)
+
+  s1 = Cylinder(r, 90)
+  s1.translate(-r*b.y)
+
+  c1 = Cylinder(r, 10)
+  c1.translate(r*b.y)
+  c1.rotate(b.z, 3*np.pi/4)
+
+  b1 = Cylinder(r, 20)
+  b1.rotate(b.z, np.pi/2)
+  b1.translate(10*b.y - (r+10)*b.x)
+  
+  s1.extend2(20)
+  c1.extend2(20)
+  b1.extend2(20)
+  
+  s1.reverse().cut(p1)
+  c1.reverse().cut(p1).reverse().cut(p2)
+  b1.reverse().cut(p2)
+
+  #p1.plot(30)
+  #p2.plot(30)
+
+  s1.plot()
+  c1.plot()
+  b1.plot()
+  return
+
+  s2 = copy.deepcopy(s1)
+  s2.translate(b.y * (w + r))
+  s2.plot()
+
+  b1 = Cylinder(r, 90)
+  b1.rotate(b.z, np.pi/2)
+  b1.translate(-b.x * (10 + r))
+  b1.translate(b.z * u)
+  b1.plot()
+
+  b2 = copy.deepcopy(b1)
+  b2.translate(b.x * (l + r))
+  b2.plot()
+  
+  c1 = Cylinder(r, 90)
+  c1.translate(-b.y*r -60*b.x)
+  c1.rotate(b.y, a) 
+  c1.rotate(b.z, -np.pi/4, c1.origin + 60*b.x)
+  c1.plot()
+  
+  return
+
+  c.reverse()
+  p = Plane(b.x)
+  p.rotate(b.z, -np.pi/8)
+  c.cut(p)
+  p.rotate(b.z, np.pi/4)
+  p.translate(90*b.x)
+  c.reverse()
+  c.cut(p)
+
+  s1 = copy.deepcopy(c)
+  s1.plot()
+
+  c.rotate(b.x, np.pi)
+  c.translate(b.y * (40 + 2*r))
+  
+  s1 = copy.deepcopy(c)
+  s1.plot()
+
+  c = Cylinder(r, 90)
+  c.translate(-20*b.x)
+  c.reverse()
+  p = Plane(b.x)
+  p.rotate(b.z, -np.pi/8)
+  c.cut(p)
+  p.rotate(b.z, np.pi/4)
+  p.translate(20*b.x)
+  c.reverse()
+  c.cut(p)
+  c.rotate(b.x, np.pi)
+  c.rotate(b.z, np.pi/2)
+  c.translate(-10*b.x + b.y*(10-r*np.cos(np.pi/8)))
+
+  c.plot()
+  p.plot()
+
+packraft()
+import mayavi.mlab as mlab
+mlab.show()
+quit()
+
+def test_extend():
+  import copy
+  c = Cylinder(10, 10)
+  c.plot()
+  c = copy.deepcopy(c)
+  c.translate(b.y*20)
+  c.extend(10)
+  c.plot()
+  c = copy.deepcopy(c)
+  c.translate(b.y*20)
+  c.extend(-20)
+  c.plot()
+  print(c.origin)
+  import mayavi.mlab as mlab
+  mlab.show()
+
 
 if False == True:
   c = Cone(rad(30), 10)
