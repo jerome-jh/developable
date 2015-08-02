@@ -19,19 +19,19 @@ def fatal(msg):
   exit(1)
 
 ## number of generatrices for shapes
-n_gen = 12
+n_gen = 32
 
 ## Rotation matrix around x-axis
 def Rx(rad):
- return np.array([[1,0,0],[0,cos(rad),-sin(rad)],[0,sin(rad),cos(rad)]]) 
+ return np.array([[1,0,0],[0,math.cos(rad),-math.sin(rad)],[0,math.sin(rad),math.cos(rad)]]) 
 
 ## Rotation matrix around y-axis
 def Ry(rad):
- return np.array([[cos(rad),0,sin(rad)],[0,1,0],[-sin(rad),0,cos(rad)]]) 
+ return np.array([[math.cos(rad),0,math.sin(rad)],[0,1,0],[-math.sin(rad),0,math.cos(rad)]]) 
 
 ## Rotation matrix around z-axis
 def Rz(rad):
- return np.array([[cos(rad),-sin(rad),0],[sin(rad),cos(rad),0],[0,0,1]]) 
+ return np.array([[math.cos(rad),-math.sin(rad),0],[math.sin(rad),math.cos(rad),0],[0,0,1]]) 
 
 ## Returns the nieth rotation matrix around x axis
 def Rxn(n):
@@ -77,7 +77,7 @@ nullvect = np.array([0,0,0])
 def _toarr(*args):
   ret = list()
   for a in args:
-    a = np.asarray(a)
+    a = np.asarray(a, dtype='f64')
     assert(a.shape == (3,))
     ret.append(a)
   if len(ret) == 1:
@@ -191,7 +191,21 @@ class Base():
     Vector(length * self.y).plot()
     Vector(length * self.z).plot()
     return self
-    
+ 
+
+def cos(u,v):
+  """
+  Return the cosinus angle between two vectors
+  """
+  return np.dot(u, v) / (length(u) * length(v))
+
+
+def sin(u,v):
+  """
+  Return the sinus angle between two vectors
+  """
+  return np.cross(u, v) / (length(u) * length(v))
+
 
 ## A shape is made of a support curve and a number of generatrices
 ## represented as vectors starting from the curve
@@ -239,6 +253,38 @@ class Developable():
     return self
 
   def develop(self):
+    """
+    Develop the 3D shape into 2D
+    """
+    return
+    ## Every flat generatrice is 2 2D points
+    flatgen = np.zeros((n_gen, 2, 2))
+    flatgen[0,0] = np.zeros(2)
+    flatgen[0,1] = np.array([0, length(self.gen[0])])
+    ## 1st generatrice is already in same plane as 0st
+    u1 = self.support[1] - self.support[0]
+    c = cos(self.gen[1], u1)
+    s = cos(self.gen[1], u1)
+    d1 = np.array(length(u1)*s + length(u1)*c)
+    flatgen[1,0] = flatgen[0,0] + d1
+    
+    for i in np.range(1, n_gen):
+        ## v is rotation axis
+        v = self.gen[i]
+        u1 = self.support[i] - self.support[i-1]
+        u2 = self.support[i] + self.gen[i] - self.support[i-1] - self.gen[i-1] 
+	## Pick the best triangle for reference plane
+    	c1 = np.cross(u1, v)
+        c2 = np.cross(v, u2)
+        if length(c1) > length(c2):
+           u = u1
+        else:
+           u = u2
+        ## Compute angle between gen and v
+        c = cos(self.gen[i+1], v)
+        alpha = np.acos(c)
+        ## alpha is preserved in rotation, such as length of gen
+        
     return self
 
   def _cut(self, line, plane):
@@ -298,8 +344,8 @@ class Cylinder(Developable):
   """
   A cylinder starting at (0,0,0) and extending towards x
   """
-  def __init__(self, radius, length):
-    self.origin = np.array([0,0,0])
+  def __init__(self, radius, length, origin=nullvect, axis=[1,0,0]):
+    self.origin, self.axis = _toarr(origin, axis)
     self.support = np.zeros((n_gen+1,3))
     first = np.array([0, radius, 0])
     for i in np.arange(0, n_gen+1):
@@ -307,6 +353,14 @@ class Cylinder(Developable):
     self.gen = np.zeros((n_gen+1,3))
     for i in np.arange(0, n_gen+1):
       self.gen[i] = np.array([length, 0, 0])
+
+  def rotate(self, axis, angle, origin=nullvect):
+    R = Rotation(axis, angle, origin)
+    self.origin = R.p(self.origin)
+    self.support = R.vs(self.support)
+    self.gen = R.vs(self.gen)
+    self.axis = R.v(self.axis)
+    return self
 
 #  def plot(self):
 #    dots = np.zeros((2*(n_gen+1), 3))
@@ -383,10 +437,33 @@ def inter(o1, o2):
 
 print("Hello")
 
+def inv_rot(u, v, a):
+  """
+  Inverse rotation around vector u, that brings vector a in plane
+  defined by u,v
+  """
+  u, v, a = _toarr(u, v, a)
+  n = np.cross(u, v)
+  if np.all(n == nullvect):
+    return 0
+  ux, uy, uz = u
+  print(ux, uy, uz)
+  vx, vy, vz = v 
+  print(vx, vy, vz)
+  x, y, z = a
+  print(x, y, z)
+  return
+
 #quit()
 
 b = Base()
 b.plot(10)
+
+R = Rotation(b.x, np.pi/4)
+v = [0, 1, 0]
+vr = R.v(v)
+print(vr)
+print(inv_rot(b.x, b.y, vr))
 
 def packraft():
   import copy
@@ -401,7 +478,9 @@ def packraft():
   ## Bow upturn
   u = 6
   ## Bow angle
-  a = math.atan(u / (2*r + 10))
+  a = math.atan(u / 37)
+  print(a)
+  a = rad(30)
 
   p1 = Plane(b.x)
   p1.rotate(b.z, -np.pi/8)
@@ -421,12 +500,26 @@ def packraft():
   b1.rotate(b.z, np.pi/2)
   b1.translate(10*b.y - (r+10)*b.x)
   
+  p1.rotate(b.x, a, [0, -r, 0])
+  c1.rotate(b.x, a, [0, -r, 0])
+  p2.rotate(b.x, a, [0, -r, 0])
+  b1.rotate(b.x, a, [0, -r, 0])
+
+  i21 = inter_plane_line(p2, Line(c1.axis, c1.origin))
+  i22 = inter_plane_line(p2, Line(b1.axis, b1.origin))
+  print(i21)
+  print(i22)
+
+  b1.rotate(b.x, -a, i21)
+  p2.rotate(b.x, -a/2, i21)
+
   s1.extend2(20)
   c1.extend2(20)
   b1.extend2(20)
   
   s1.reverse().cut(p1)
-  c1.reverse().cut(p1).reverse().cut(p2)
+  c1.reverse().cut(p1)
+  c1.reverse().cut(p2)
   b1.reverse().cut(p2)
 
   #p1.plot(30)
